@@ -1,9 +1,17 @@
+#
+#   USAGE: python manifest.py /path/to/game.manifest /path/to/game
+# EXAMPLE: python manifest.py ~/Downloads/26.30.manifest ~/WinApps/26.30/
+# EXAMPLE: python manifest.py C:/Users/Yes/Downloads/26.30.manifest C:/Users/yes/WinApps/26.30/
+#
+
+
 import struct
 import zlib
 import io
 import sys
 import os
 import hashlib
+import json
 
 def read_int32(f):
     return struct.unpack("<i", f.read(4))[0]
@@ -25,6 +33,7 @@ def read_string(f):
 MAGIC = 0x44BEC00C
 
 if len(sys.argv) < 3:
+    print("Check the top of manifest.py for usage/example")
     exit()
 
 path = sys.argv[1]
@@ -122,7 +131,8 @@ fml_element_count = read_uint32(data)
 man_files = []
 for i in range(fml_element_count):
     man_files.append({
-        "name": read_string(data)
+        "name": read_string(data),
+        "found": False
     })
 
 for i in range(fml_element_count):
@@ -140,8 +150,8 @@ for i in range(fml_element_count):
 # for i in range(fml_element_count):
 #     data.read(24) # FGuid + uint32 + uint32
 
-#                                  FortniteGame/Content/Paks/pakchunk1000-WindowsClient.pak
-# /home/yes/WinApps/26.30/Fortnite/FortniteGame/Content/Paks/pakchunk1000-WindowsClient.pak
+# json.dump(man_files, open("files.json", "w"))
+# exit();
 
 extra_files = []
 wrong_hash_count = 0
@@ -155,6 +165,7 @@ for root, dirs, walk_files in os.walk(sys.argv[2]):
         for man_file in man_files:
             if full_path.endswith(man_file["name"]):
                 found = True
+                man_file["found"] = True
                 mhash = man_file["hash"]
                 fhash = hashlib.sha1()
                 with open(full_path, "rb") as f:
@@ -179,3 +190,9 @@ with open("extra_files.txt", "w") as f:
     for file in extra_files:
         f.write(file)
         f.write("\n")
+print("Writing missing files to missing_files.txt")
+with open("missing_files.txt", "w") as f:
+    for file in man_files:
+        if not file["found"]:
+            f.write(file["name"])
+            f.write("\n")
