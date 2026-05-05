@@ -2,6 +2,8 @@ import struct
 import zlib
 import io
 import sys
+import os
+import hashlib
 
 def read_int32(f):
     return struct.unpack("<i", f.read(4))[0]
@@ -22,7 +24,7 @@ def read_string(f):
 
 MAGIC = 0x44BEC00C
 
-if len(sys.argv) < 2:
+if len(sys.argv) < 3:
     exit()
 
 path = sys.argv[1]
@@ -117,25 +119,63 @@ fml_element_count = read_uint32(data)
 # print(fml_version)
 # print(fml_element_count)
 
-files = []
+man_files = []
 for i in range(fml_element_count):
-    files.append({
+    man_files.append({
         "name": read_string(data)
     })
 
 for i in range(fml_element_count):
-    files[i]["symlink_target"] = read_string(data)
+    man_files[i]["symlink_target"] = read_string(data)
 for i in range(fml_element_count):
-    files[i]["hash"] = data.read(20).hex()
+    man_files[i]["hash"] = data.read(20).hex()
 for i in range(fml_element_count):
-    files[i]["flags"] = read_uint8(data)
+    man_files[i]["flags"] = read_uint8(data)
 for i in range(fml_element_count):
     arr = []
     arr_size = read_int32(data)
     for j in range(arr_size):
         arr.append(read_string(data))
-    files[i]["install_tags"] = arr
+    man_files[i]["install_tags"] = arr
 # for i in range(fml_element_count):
 #     data.read(24) # FGuid + uint32 + uint32
 
-print(files[-20])
+#                                  FortniteGame/Content/Paks/pakchunk1000-WindowsClient.pak
+# /home/yes/WinApps/26.30/Fortnite/FortniteGame/Content/Paks/pakchunk1000-WindowsClient.pak
+
+extra_files = []
+wrong_hash_count = 0
+
+print(man_files[-20])
+for root, dirs, walk_files in os.walk(sys.argv[2]):
+    for file in walk_files:
+        full_path = os.path.join(root, file)
+
+        found = False
+        for man_file in man_files:
+            if full_path.endswith(man_file["name"]):
+                found = True
+                mhash = man_file["hash"]
+                fhash = hashlib.sha1()
+                with open(full_path, "rb") as f:
+                    while True:
+                        fd = f.read(1024 * 1024 * 1024)
+                        if not fd:
+                            break
+                        fhash.update(fd)
+
+                if mhash != fhash.hexdigest():
+                    print(f"\033[31mWrong hash on {full_path}\033[0m")
+                    wrong_hash_count += 1
+                else:
+                    print(f"\033[32mCorrect hash on {full_path}\033[0m")
+
+        if not found:
+            extra_files.append(full_path)
+
+print(f"{wrong_hash_count} wrong hashes found")
+print(f"{len(extra_files)} extra files found, writing to extra_files.txt")
+with open("extra_files.txt", "w") as f:
+    for file in extra_files:
+        f.write(file)
+        f.write("\n")
